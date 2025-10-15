@@ -49,7 +49,7 @@ class SetNet(nn.Module):
                 nn.init.normal(m.weight.data, 1.0, 0.02)
                 nn.init.constant(m.bias.data, 0.0)
 
-    def frame_max(self, x):
+    def frame_max(self, x):     #输入的特征图 x 形状一般是 [Batch_Size, Frame_Num, Channel, Height, Width]，其中第二个维度是帧数（Set Dimension）
         if self.batch_frame is None:
             return torch.max(x, 1)
         else:
