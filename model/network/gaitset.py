@@ -121,12 +121,12 @@ class SetNet(nn.Module):
         gl = gl + x
 
         feature = list()
-        n, c, h, w = gl.size()
-        for num_bin in self.bin_num:  # 这里的循环相当于对feature map运用HPP
-            z = x.view(n, c, num_bin, -1)  # 按高度进行划分成strips
+        n, c, h, w = gl.size()  # 获取特征图的尺寸信息
+        for num_bin in self.bin_num:  # [1, 2, 4, 8, 16]，也就是HPM划分的条带数
+            z = x.view(n, c, num_bin, -1)  # “切分”动作，划分成对应数量的strips
             z = z.mean(3) + z.max(3)[0]  # 应用maxpool和avgpool
             feature.append(z)  # z的形状为 n,c,num_bin
-            z = gl.view(n, c, num_bin, -1)  # 对gl也运用HPP
+            z = gl.view(n, c, num_bin, -1)  # 对gl也切分
             z = z.mean(3) + z.max(3)[0]
             feature.append(z)  # 将gl和z的都加入到feature中
         feature = torch.cat(feature, 2).permute(2, 0, 1).contiguous()
