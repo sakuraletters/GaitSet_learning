@@ -9,7 +9,7 @@ class SetNet(nn.Module):
     def __init__(self, hidden_dim):
         super(SetNet, self).__init__()
         self.hidden_dim = hidden_dim
-        self.batch_frame = None
+        self.batch_frame = None #等长（帧数）序列默认为none，当不一致时就会记录帧数，如[0, 10, 25, 45]，样本1的帧：0-9
 
         _set_in_channels = 1
         _set_channels = [32, 64, 128]
@@ -50,15 +50,17 @@ class SetNet(nn.Module):
                 nn.init.constant(m.bias.data, 0.0)
 
     def frame_max(self, x):     #输入特征图 x 形状 [Batch_Size, Frame_Num, Channel, Height, Width]，其中维度1（F）是帧数（Set Dimension）
-        if self.batch_frame is None:  # 当输入 x 的维度为 [N, S, C, H, W] 时，对维度1 (S，即帧数)求最大值
-            return torch.max(x, 1)
-        else:
+        if self.batch_frame is None:  
+            return torch.max(x, 1)  # 当输入x的维度为 [N, S, C, H, W] 时，对维度1 (S，即帧数)进行MAX Pooling
+        # 返回一个元组 (max_values, argmax_indices)。
+        # max_values 形状：[N, C, H, W]（Set Pooling 后的结果）argmax_indices 形状：[N, C, H, W]（记录最大值是从哪一帧取到的）
+        else: #用于处理批次中的不同步态序列具有不同帧数，手动对每个样本的帧序列进行 Max Pooling
             _tmp = [
-                torch.max(x[:, self.batch_frame[i]:self.batch_frame[i + 1], :, :, :], 1)
+                torch.max(x[:, self.batch_frame[i]:self.batch_frame[i + 1], :, :, :], 1) # [i] 是起始索引，[i + 1] 是结束索引，见L12
                 for i in range(len(self.batch_frame) - 1)
             ]
-            max_list = torch.cat([_tmp[i][0] for i in range(len(_tmp))], 0)
-            arg_max_list = torch.cat([_tmp[i][1] for i in range(len(_tmp))], 0)
+            max_list = torch.cat([_tmp[i][0] for i in range(len(_tmp))], 0)  #Max Pooling 结果
+            arg_max_list = torch.cat([_tmp[i][1] for i in range(len(_tmp))], 0) #最大值是从哪一帧取到的
             return max_list, arg_max_list
 
     def frame_median(self, x):
