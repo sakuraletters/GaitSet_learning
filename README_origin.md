@@ -151,6 +151,69 @@ Link to paper:
 - [GaitSet: Regarding Gait as a Set for Cross-View Gait Recognition](https://arxiv.org/abs/1811.06186)
 
 
+graph TD
+    %% 定义样式
+    classDef input fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef network fill:#fff3e0,stroke:#ff6f00,stroke-width:2px;
+    classDef output fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    classDef training fill:#f3e5f5,stroke:#4a148c,stroke-width:2px,stroke-dasharray: 5 5;
+    classDef operation fill:#ffffff,stroke:#616161,stroke-width:1px;
+
+    %% --- 输入阶段 ---
+    subgraph Input Data
+        RGB["RGB Video Frames<br/>N x S x 3 x H x W"]:::input
+        RawGT["Raw GT Labels<br/>N x S x 1 x H x W"]:::input
+    end
+
+    %% --- 网络前向传播阶段 ---
+    subgraph E2E Segmentation Network
+        RGB --> UNet["Shared Backbone<br/>(e.g., U-Net Encoder-Decoder)"]:::network
+        UNet --> SharedFeat["Shared Features"]:::network
+        
+        %% 分支 1: 概率图
+        SharedFeat --> HeadP["Head P<br/>(Conv + Sigmoid)"]:::network
+        HeadP --> PMap["Probability Map (P)<br/>'Is this a person?'"]:::output
+        
+        %% 分支 2: 阈值图
+        SharedFeat --> HeadT["Head T<br/>(Conv + Sigmoid)"]:::network
+        HeadT --> TMap["Threshold Map (T)<br/>'How strict is the boundary here?'"]:::output
+    end
+    
+    %% --- 可微分二值化模块 ---
+    subgraph DB Module
+        PMap --> DBCalc
+        TMap --> DBCalc
+        KParam["Amplification Factor k=50"]:::operation --> DBCalc
+        
+        DBCalc["Differentiable Binarization<br/>B_hat = 1 / (1 + exp(-k * (P - T)))"]:::operation
+        DBCalc --> FinalSil["Final Refined Silhouettes<br/>(Soft Binary Output)"]:::output
+    end
+
+    %% --- 训练监督阶段 ---
+    %% 修复点1：ID 从 "Training Supervision" 改为 "TrainingSupervision" (无空格)
+    subgraph TrainingSupervision [Training Supervision & Online GT Gen]
+        RawGT -.-> MorphOps["Morphological Operations<br/>(Erosion / Dilation)"]:::training
+        
+        MorphOps -.-> EdgeGT["Soft Edge Targets<br/>(Gaussian blurred edges)"]:::training
+        MorphOps -.-> MaskGT["Boundary Mask (R_d)<br/>(Dilated area only, ignore background)"]:::training
+        
+        PMap -.-> LossP{Loss P<br/>BCE + Dice}:::training
+        RawGT -.-> LossP
+        
+        TMap -.-> LossT_Pre["Masking Operation<br/>Select pixels only in Boundary Mask"]:::training
+        EdgeGT -.-> LossT_Pre
+        MaskGT -.-> LossT_Pre
+        
+        LossT_Pre -.-> LossT{Masked Loss T<br/>L1 Loss}:::training
+    end
+
+    FinalSil --> NextStage["To Gait Recognition Network<br/>(e.g., GaitSet)"]
+
+    linkStyle default stroke-width:2px,fill:none,stroke:black;
+    
+    %% 修复点2：引用时也使用无空格的 ID
+    class TrainingSupervision training
+
 ## License
 GaitSet is freely available for free non-commercial use, and may be redistributed under these conditions.
 For commercial queries, contact [Junping Zhang](http://www.pami.fudan.edu.cn/~jpzhang/).
